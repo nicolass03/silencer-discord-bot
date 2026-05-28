@@ -1,0 +1,14 @@
+services:
+  bot:
+    build: .
+    image: silencer-discord-bot:latest
+    container_name: silencer-discord-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    stop_grace_period: 10s
+    volumes:
+      - whisper-cache:/cache
+
+volumes:
+  whisper-cache:
