@@ -20,6 +20,7 @@ RUN apt-get update \
         libopus0 \
         libgomp1 \
         git \
+        ffmpeg \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.12 /usr/local/bin/python \

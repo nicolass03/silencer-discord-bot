@@ -12,7 +12,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libopus0 libgomp1 git \
+    && apt-get install -y --no-install-recommends libopus0 libgomp1 git ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./

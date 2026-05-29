@@ -33,6 +33,7 @@ class SilencerBot(commands.Bot):
         await self.load_extension("src.cogs.moderator")
         await self.load_extension("src.cogs.transcribe")
         await self.load_extension("src.cogs.voice")
+        await self.load_extension("src.cogs.music")
         await self.load_extension("src.cogs.chat")
         synced = await self.tree.sync()
         log.info("Synced %d slash command(s) globally", len(synced))
