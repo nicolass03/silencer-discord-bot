@@ -8,6 +8,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands, voice_recv
 
+from src.voice_connect import NotInVoiceChannelError, ensure_voice_client
+
 log = logging.getLogger("silencer.voice")
 
 
@@ -48,32 +50,29 @@ class Voice(commands.Cog):
 
         target = member.voice.channel
         voice_client = interaction.guild.voice_client
+        if (
+            voice_client is not None
+            and voice_client.is_connected()
+            and voice_client.channel == target
+        ):
+            await interaction.response.send_message(
+                f"Already in {target.mention}.", ephemeral=True
+            )
+            return
 
         try:
-            if voice_client is not None and voice_client.is_connected():
-                if voice_client.channel == target:
-                    await interaction.response.send_message(
-                        f"Already in {target.mention}.", ephemeral=True
-                    )
-                    return
-                await voice_client.move_to(target)
-                log.info("Moved to voice channel '%s' in guild '%s'", target, interaction.guild)
-            else:
-                voice_client = await target.connect(cls=voice_recv.VoiceRecvClient)
-                log.info("Connected to voice channel '%s' in guild '%s'", target, interaction.guild)
+            await ensure_voice_client(interaction.guild, member, bot=self.bot)
+        except NotInVoiceChannelError:
+            await interaction.response.send_message(
+                "You need to be in a voice channel first.", ephemeral=True
+            )
+            return
         except discord.ClientException as exc:
             log.exception("Failed to join voice channel")
             await interaction.response.send_message(
                 f"Could not join voice channel: {exc}", ephemeral=True
             )
             return
-
-        transcribe_cog = self._transcribe_cog()
-        if transcribe_cog is not None and isinstance(voice_client, voice_recv.VoiceRecvClient):
-            try:
-                await transcribe_cog.start(voice_client)
-            except Exception:
-                log.exception("Failed to start transcription")
 
         await interaction.response.send_message(f"Joined {target.mention}.")
 

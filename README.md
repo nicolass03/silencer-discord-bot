@@ -8,6 +8,7 @@ commands.
 
 - Python 3.11 or newer
 - A Discord application + bot token
+- [FFmpeg](https://ffmpeg.org/download.html) on your PATH (required for `/play`)
 
 ## Setup
 
@@ -27,8 +28,13 @@ pip install -r requirements.txt
 ```
 
 `PyNaCl` is bundled in `requirements.txt` and is required for voice connections.
-No `ffmpeg` install is needed yet because the bot does not play or record audio
-in this initial scaffold.
+Install FFmpeg before using music commands (macOS: `brew install ffmpeg`).
+
+YouTube playback uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) — no YouTube
+Data API key and no YouTube Premium API key (Premium does not provide bot
+streaming credentials). If YouTube blocks your server IP, set `YTDLP_COOKIES_PATH`
+in `.env` to a Netscape cookies file exported from a logged-in browser (do not
+commit that file).
 
 ### 3. Create a Discord application and bot
 
@@ -77,7 +83,7 @@ python -m src.bot
 You should see log output similar to:
 
 ```
-[INFO] silencer.bot: Synced 3 slash command(s) globally
+[INFO] silencer.bot: Synced 7 slash command(s) globally
 [INFO] silencer.bot: Logged in as YourBot#1234 (id=...) in 1 guild(s)
 ```
 
@@ -92,6 +98,23 @@ All commands are slash commands.
 | `/ping` | Replies with the bot's gateway latency. |
 | `/join` | Connects the bot to the voice channel you are currently in. |
 | `/leave` | Disconnects the bot from its current voice channel. |
+| `/play` | Play a YouTube track by search query or URL (joins your voice channel). |
+| `/stop` | Stop playback and clear the music queue. |
+| `/skip` | Skip the current track and play the next queued track. |
+| `/queue` | Show the current track and queued tracks. |
+
+## YouTube music playback
+
+Use `/play` with a song name or a YouTube link while you are in a voice channel.
+The bot joins your channel (same connection used for transcription), resolves
+audio via yt-dlp, and streams it with FFmpeg. Example:
+
+```
+/play we will rock you
+```
+
+Transcription and trigger-word moderation keep running; when `MUTE_TARGET_USERNAME`
+is set, only that user's microphone is transcribed (not the bot's playback).
 
 ## Voice activity logging
 
@@ -359,10 +382,12 @@ silencer-discord-bot/
     ├── transcriber.py
     ├── llm.py
     ├── personality.py
+    ├── voice_connect.py
     └── cogs/
         ├── __init__.py
         ├── chat.py
         ├── moderator.py
+        ├── music.py
         ├── transcribe.py
         └── voice.py
 ```
