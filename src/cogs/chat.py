@@ -25,12 +25,17 @@ def _disabled_message() -> str:
     return os.getenv("CHAT_DISABLED_MESSAGE", _DEFAULT_DISABLED_MESSAGE).strip() or _DEFAULT_DISABLED_MESSAGE
 
 
-def _strip_bot_mention(message: discord.Message, bot_user: discord.ClientUser) -> str:
+def _resolve_mentions(message: discord.Message, bot_user: discord.ClientUser) -> str:
+    """Strip the bot's own mention and replace other user mentions with names."""
     text = message.content
     for mention in message.mentions:
         if mention.id == bot_user.id:
             text = text.replace(f"<@{mention.id}>", "")
             text = text.replace(f"<@!{mention.id}>", "")
+        else:
+            name = getattr(mention, "display_name", mention.name)
+            text = text.replace(f"<@{mention.id}>", f"@{name}")
+            text = text.replace(f"<@!{mention.id}>", f"@{name}")
     return " ".join(text.split()).strip()
 
 
@@ -68,7 +73,7 @@ class Chat(commands.Cog):
                 log.exception("Failed to send chat-disabled reply")
             return
 
-        body = _strip_bot_mention(message, self.bot.user)
+        body = _resolve_mentions(message, self.bot.user)
         if not body:
             try:
                 await message.reply(

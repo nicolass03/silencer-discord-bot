@@ -9,6 +9,7 @@ Backends (CHAT_PROVIDER):
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -121,6 +122,7 @@ def _chat_messages(config: ChatConfig, user_line: str) -> list[dict[str, str]]:
     if config.system_prompt:
         messages.append({"role": "system", "content": config.system_prompt})
     messages.append({"role": "user", "content": user_line})
+    log.info("Sending messages to LLM:\n%s", json.dumps(messages, ensure_ascii=False, indent=2))
     return messages
 
 
@@ -230,6 +232,7 @@ class LlamaChat:
         """Run one chat completion. `user_line` is e.g. 'Alice: hello'."""
         cfg = self.config
         prompt = format_chatml_prompt(system=cfg.system_prompt, user_line=user_line)
+        log.info("Sending prompt to LLM:\n%s", prompt)
 
         await self._ensure_loaded()
         assert self._model is not None
