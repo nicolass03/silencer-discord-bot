@@ -3,18 +3,18 @@ services:
     build:
       context: .
       args:
-        BOT_PROFILE: full
-    image: silencer-discord-bot:latest
-    container_name: silencer-discord-bot
+        BOT_PROFILE: slim
+    image: silencer-discord-bot:slim
+    container_name: silencer-discord-bot-slim
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      BOT_PROFILE: full
+      BOT_PROFILE: slim
     stop_grace_period: 10s
     volumes:
       - ./prompts:/app/prompts:ro
-      - whisper-cache:/cache
-
-volumes:
-  whisper-cache:
+    deploy:
+      resources:
+        limits:
+          memory: 768M

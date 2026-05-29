@@ -1,0 +1,46 @@
+{
+  "family": "silencer-discord-bot-slim",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/silencerBotTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "bot",
+      "image": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/silencer-discord-bot:slim",
+      "essential": true,
+      "environment": [
+        {"name": "BOT_PROFILE", "value": "slim"},
+        {"name": "CHAT_ENABLED", "value": "true"},
+        {"name": "CHAT_PROVIDER", "value": "ollama_cloud"},
+        {"name": "CHAT_OLLAMA_MODEL", "value": "gpt-oss:120b"},
+        {"name": "CHAT_MAX_TOKENS", "value": "256"},
+        {"name": "CHAT_TEMPERATURE", "value": "0.7"},
+        {"name": "CHAT_TOP_P", "value": "0.9"},
+        {"name": "CHAT_INFERENCE_TIMEOUT", "value": "120"},
+        {"name": "MUSIC_MAX_QUEUE", "value": "10"}
+      ],
+      "secrets": [
+        {
+          "name": "DISCORD_TOKEN",
+          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:silencer/discord-token"
+        },
+        {
+          "name": "OLLAMA_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:silencer/ollama-api-key"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/silencer-discord-bot-slim",
+          "awslogs-region": "REGION",
+          "awslogs-stream-prefix": "bot"
+        }
+      },
+      "stopTimeout": 10
+    }
+  ]
+}

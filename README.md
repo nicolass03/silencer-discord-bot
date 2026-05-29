@@ -298,12 +298,46 @@ CHAT_LMSTUDIO_MODEL=your-loaded-model
 LMSTUDIO_BASE_URL=http://localhost:1234/v1
 ```
 
+## Deployment profiles
+
+The bot supports two deployment profiles via `BOT_PROFILE`:
+
+| Profile | Features | Chat backends | Typical host |
+| --- | --- | --- | --- |
+| **full** (default) | Voice, music, transcription, trigger-word moderation | llama, ollama_cloud, lmstudio | Local machine, GPU box, larger EC2 |
+| **slim** | Voice, music, @mention chat only | ollama_cloud only (or chat disabled) | AWS free-tier micro, small Fargate task |
+
+**Memory guidance:** slim peaks around 350–550 MB with music playing; full needs substantially more (Whisper + optional local LLM).
+
+### Local development
+
+Full (default):
+
+```bash
+pip install -r requirements.txt
+python -m src.bot
+```
+
+Slim:
+
+```bash
+pip install -r requirements-slim.txt
+BOT_PROFILE=slim CHAT_ENABLED=true CHAT_PROVIDER=ollama_cloud OLLAMA_API_KEY=... python -m src.bot
+```
+
+Requirement files:
+
+- `requirements-base.txt` — shared deps (Discord, voice, yt-dlp)
+- `requirements-full.txt` — base + faster-whisper, llama-cpp-python
+- `requirements-slim.txt` — base only
+- `requirements.txt` — alias for full (backward compatible)
+
 ## Run with Docker
 
 You can also run the bot in a container, which is the easiest way to "press
 play" from Docker Desktop and have it auto-restart.
 
-### Option A: Docker Compose (recommended)
+### Option A: Docker Compose — full profile (recommended for local/STT)
 
 This is the one-click path for Docker Desktop. The Compose project will appear
 in the **Containers** tab and you can start/stop it from there.
@@ -331,20 +365,65 @@ After the first `docker compose up`, Docker Desktop will show a
 `silencer-discord-bot` stack under **Containers**, and you can use the play /
 stop buttons there directly.
 
-### Option B: Plain Docker
+Uses `BOT_PROFILE=full`, mounts a `whisper-cache` volume for model downloads,
+and includes transcription + moderation cogs.
+
+### Option B: Docker Compose — slim profile (Ollama Cloud + music)
+
+For cloud hosting without local STT or LLM:
+
+```bash
+docker compose -f docker-compose.slim.yml up -d --build
+docker compose -f docker-compose.slim.yml logs -f
+docker compose -f docker-compose.slim.yml down
+```
+
+Set in `.env` before starting:
+
+```env
+BOT_PROFILE=slim
+CHAT_ENABLED=true
+CHAT_PROVIDER=ollama_cloud
+OLLAMA_API_KEY=your-key-here
+```
+
+Image tag: `silencer-discord-bot:slim`. No whisper model cache volume. Compose
+sets a 768 MB memory limit suitable for small hosts.
+
+See [deploy/ecs/README.md](deploy/ecs/README.md) for AWS ECS deployment of the
+slim image.
+
+### Option C: GPU Compose (full profile only)
+
+```bash
+docker compose -f docker-compose.gpu.yml up -d --build
+```
+
+Requires NVIDIA Container Toolkit. Implies `BOT_PROFILE=full`.
+
+### Option D: Plain Docker
+
+Full:
 
 ```bash
 docker build -t silencer-discord-bot .
 docker run -d --name silencer-discord-bot \
   --restart unless-stopped \
   --env-file .env \
+  -e BOT_PROFILE=full \
   silencer-discord-bot
 ```
 
-To launch from the Docker Desktop UI instead of the CLI: after `docker build`,
-open Docker Desktop -> **Images** -> click the `silencer-discord-bot` image ->
-**Run**, expand **Optional settings**, and under **Environment variables** add
-`DISCORD_TOKEN` with your token value, then click **Run**.
+Slim:
+
+```bash
+docker build --build-arg BOT_PROFILE=slim -t silencer-discord-bot:slim .
+docker run -d --name silencer-discord-bot-slim \
+  --restart unless-stopped \
+  --env-file .env \
+  -e BOT_PROFILE=slim \
+  silencer-discord-bot:slim
+```
 
 ## Notes
 
@@ -370,15 +449,26 @@ silencer-discord-bot/
 ├── .dockerignore
 ├── .env.example
 ├── Dockerfile
+├── Dockerfile.gpu
 ├── README.md
 ├── docker-compose.yml
+├── docker-compose.slim.yml
+├── docker-compose.gpu.yml
+├── deploy/
+│   └── ecs/
+│       ├── README.md
+│       └── task-definition.slim.json
 ├── prompts/
 │   ├── README.md
 │   └── personality.txt
+├── requirements-base.txt
+├── requirements-full.txt
+├── requirements-slim.txt
 ├── requirements.txt
 └── src/
     ├── __init__.py
     ├── bot.py
+    ├── profile.py
     ├── transcriber.py
     ├── llm.py
     ├── personality.py
