@@ -18,6 +18,7 @@ RUN apt-get update \
         python3.12-venv \
         python3-pip \
         libopus0 \
+        libgomp1 \
         git \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
@@ -25,7 +26,11 @@ RUN apt-get update \
     && ln -sf /usr/bin/python3.12 /usr/local/bin/python3
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+# The cuda:*-runtime base has no nvcc, so we can't compile llama-cpp-python.
+# Pull a prebuilt CUDA wheel from the project index (cu124 matches CUDA 12.x).
+RUN pip install --no-cache-dir --break-system-packages --prefer-binary \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124 \
+    -r requirements.txt
 
 COPY src ./src
 COPY prompts ./prompts

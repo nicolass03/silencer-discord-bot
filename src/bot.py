@@ -37,6 +37,12 @@ class SilencerBot(commands.Bot):
         synced = await self.tree.sync()
         log.info("Synced %d slash command(s) globally", len(synced))
 
+    async def on_message(self, message: discord.Message) -> None:
+        # Slash-command-only bot: never parse messages as prefix commands.
+        # Mentions are handled by the Chat cog's on_message listener, which
+        # the library dispatches independently of this override.
+        return
+
     async def on_ready(self) -> None:
         assert self.user is not None
         log.info(

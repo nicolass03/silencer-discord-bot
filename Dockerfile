@@ -12,11 +12,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libopus0 git \
+    && apt-get install -y --no-install-recommends libopus0 libgomp1 git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# llama-cpp-python ships no PyPI wheel; pull a prebuilt CPU wheel from the
+# project index so we don't need a C/C++ toolchain in the image.
+RUN pip install --no-cache-dir --prefer-binary \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+    -r requirements.txt
 
 COPY src ./src
 COPY prompts ./prompts

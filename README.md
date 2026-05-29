@@ -175,7 +175,7 @@ All settings are optional and live in `.env`:
 ## @mention chat (local LLM)
 
 When a user @mentions the bot in a text channel, the bot can reply using
-[Nous-Hermes-2-Pro-Mistral-7B](https://huggingface.co/TheBloke/Nous-Hermes-2-Pro-Mistral-7B-GGUF)
+[Dolphin 2.6 Mistral 7B](https://huggingface.co/TheBloke/dolphin-2.6-mistral-7B-GGUF)
 (GGUF via [llama-cpp-python](https://github.com/abetlen/llama-cpp-python))
 running fully on your machine. The prompt sent to the model is
 `{username}: {message text after the mention}` (Discord @handle, not display name).
@@ -191,7 +191,7 @@ chat is not running. When enabled, the model loads lazily on the first
 | --- | --- | --- |
 | `CHAT_ENABLED` | `false` | Set to `true` / `1` / `yes` / `on` to load the model and reply. |
 | `CHAT_MODEL_PATH` | _(empty)_ | Optional path to a local `.gguf` file; skips Hugging Face download if set. |
-| `CHAT_MODEL_REPO` | `TheBloke/Nous-Hermes-2-Pro-Mistral-7B-GGUF` | Hugging Face repo for auto-download. |
+| `CHAT_MODEL_REPO` | `TheBloke/dolphin-2.6-mistral-7B-GGUF` | Hugging Face repo for auto-download. |
 | `CHAT_MODEL_FILE` | `...Q4_K_M.gguf` | Quantized file name (~4 GB). Q4_K_M balances speed and RAM. |
 | `CHAT_N_CTX` | `2048` | Context window; lower uses less RAM. |
 | `CHAT_N_GPU_LAYERS` | `0` | `0` for CPU; `-1` or `35` to offload layers when using a CUDA llama-cpp build. |

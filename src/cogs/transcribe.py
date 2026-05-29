@@ -49,6 +49,16 @@ MIN_FLUSH_SECONDS = 0.20
 OVERLAP_SECONDS = 0.30
 WATCHDOG_INTERVAL_SECONDS = 60.0
 PACKET_STALL_WARN_SECONDS = 30.0
+# Seconds of no decoded packets (while connected, listening, and humans are in
+# the channel) before forcing a full voice reconnect. <= 0 disables the
+# packet-idle reconnect (the is_connected / is_listening recoveries still run).
+# Tune via VOICE_STALL_RECONNECT_SECONDS.
+PACKET_STALL_RECONNECT_SECONDS = float(
+    os.getenv("VOICE_STALL_RECONNECT_SECONDS", "90") or "90"
+)
+# Minimum gap between reconnect attempts so a persistent stall can't thrash the
+# voice connection every watchdog tick.
+RECONNECT_COOLDOWN_SECONDS = 45.0
 
 OVERLAP_BYTES = int(OVERLAP_SECONDS * BYTES_PER_SECOND)
 # PCM frames from voice-recv are 20 ms stereo s16 = 3840 bytes; align overlap
@@ -146,6 +156,8 @@ class _GuildSession:
         self._packets_received = 0
         self._last_packet_at = time.monotonic()
         self._last_watchdog_at = time.monotonic()
+        self._recovering = False
+        self._last_reconnect_at = 0.0
 
     def attach(
         self,
@@ -219,7 +231,7 @@ class _GuildSession:
 
         vc = self.voice_client
         sink = self.sink
-        if vc is None or sink is None:
+        if vc is None or sink is None or self._recovering:
             return
 
         try:
@@ -227,9 +239,12 @@ class _GuildSession:
         except Exception:
             connected = False
         if not connected:
+            # Unambiguous failure: we expect to be connected but aren't.
             log.warning(
-                "[watchdog/%s] Voice client is no longer connected", self.guild.name
+                "[watchdog/%s] Voice client is no longer connected; reconnecting",
+                self.guild.name,
             )
+            self.loop.create_task(self._recover("not connected"))
             return
 
         listening: bool | None
@@ -249,6 +264,106 @@ class _GuildSession:
                 log.exception(
                     "[watchdog/%s] Failed to re-attach sink", self.guild.name
                 )
+            return
+
+        # Connected and listening, but no decoded packets for a long time while
+        # humans are in the channel -> likely a silent decode/receive stall.
+        # Reconnect to reset the pipeline (throttled by the cooldown). Genuine
+        # silence with nobody talking is expected and must not trigger this.
+        if (
+            PACKET_STALL_RECONNECT_SECONDS > 0
+            and idle >= PACKET_STALL_RECONNECT_SECONDS
+            and now - self._last_reconnect_at >= RECONNECT_COOLDOWN_SECONDS
+            and self._human_listeners_present()
+        ):
+            log.warning(
+                "[watchdog/%s] No decoded packets for %.0fs with humans present; "
+                "reconnecting to recover the audio pipeline",
+                self.guild.name,
+                idle,
+            )
+            self.loop.create_task(self._recover("packet stall"))
+
+    def _human_listeners_present(self) -> bool:
+        vc = self.voice_client
+        channel = vc.channel if vc is not None else None
+        if channel is None:
+            return False
+        return any(not member.bot for member in channel.members)
+
+    async def _recover(self, reason: str) -> None:
+        """Force a voice reconnect and re-attach the sink (watchdog recovery)."""
+        if self._recovering or self._stopped:
+            return
+        self._recovering = True
+        self._last_reconnect_at = time.monotonic()
+        vc = self.voice_client
+        sink = self.sink
+        try:
+            if vc is None or sink is None:
+                return
+            channel = vc.channel
+            if channel is None:
+                log.warning(
+                    "[watchdog/%s] Cannot recover: voice channel unknown",
+                    self.guild.name,
+                )
+                return
+            log.warning(
+                "[watchdog/%s] Recovering voice connection (reason: %s)...",
+                self.guild.name,
+                reason,
+            )
+            try:
+                vc.stop_listening()
+            except Exception:
+                log.debug(
+                    "[watchdog/%s] stop_listening during recovery raised",
+                    self.guild.name,
+                    exc_info=True,
+                )
+            try:
+                await vc.disconnect(force=True)
+            except Exception:
+                log.debug(
+                    "[watchdog/%s] disconnect during recovery raised",
+                    self.guild.name,
+                    exc_info=True,
+                )
+            await asyncio.sleep(1.0)
+            if self._stopped:
+                return
+            try:
+                new_vc = await channel.connect(
+                    cls=voice_recv.VoiceRecvClient, reconnect=True
+                )
+            except Exception:
+                log.exception(
+                    "[watchdog/%s] Reconnect failed", self.guild.name
+                )
+                return
+            self.voice_client = new_vc
+            # Fresh sink: the previous one may still be considered "in use" by
+            # voice-recv after the forced disconnect.
+            new_sink = _LiveSink(self)
+            self.sink = new_sink
+            try:
+                new_vc.listen(new_sink)
+            except Exception:
+                log.exception(
+                    "[watchdog/%s] Failed to re-attach sink after reconnect",
+                    self.guild.name,
+                )
+                return
+            now = time.monotonic()
+            self._last_packet_at = now
+            self._last_watchdog_at = now
+            log.info(
+                "[watchdog/%s] Voice reconnected and listening re-attached",
+                self.guild.name,
+            )
+        finally:
+            self._recovering = False
 
     def _collect_and_dispatch(self) -> None:
         now = time.monotonic()
