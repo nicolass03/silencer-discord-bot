@@ -112,6 +112,17 @@ def resolve_model_path(config: ChatConfig) -> str:
         raise FileNotFoundError(f"CHAT_MODEL_PATH does not exist: {path}")
 
     cache_dir = os.getenv("HF_HOME", "").strip() or None
+
+    from huggingface_hub import hf_hub_download, try_to_load_from_cache
+
+    cached = try_to_load_from_cache(
+        repo_id=config.model_repo,
+        filename=config.model_file,
+        cache_dir=cache_dir,
+    )
+    if cached is not None:
+        return cached
+
     log.info(
         "Downloading chat model %s/%s (cache_dir=%s)...",
         config.model_repo,
@@ -119,12 +130,15 @@ def resolve_model_path(config: ChatConfig) -> str:
         cache_dir or "default",
     )
 
-    from huggingface_hub import hf_hub_download
-
     downloaded = hf_hub_download(
         repo_id=config.model_repo,
         filename=config.model_file,
         cache_dir=cache_dir,
+    )
+    log.info("Chat model downloaded to: %s", downloaded)
+    log.info(
+        "Set CHAT_MODEL_PATH=%s in .env to use this file directly on the next run",
+        downloaded,
     )
     return downloaded
 
