@@ -47,8 +47,8 @@ def _env_float(name: str, default: float) -> float:
 class ChatConfig:
     enabled: bool = False
     model_path: str | None = None
-    model_repo: str = "TheBloke/Nous-Hermes-2-Pro-Mistral-7B-GGUF"
-    model_file: str = "Nous-Hermes-2-Pro-Mistral-7B-GGUF.Q4_K_M.gguf"
+    model_repo: str = "TheBloke/dolphin-2.6-mistral-7B-GGUF"
+    model_file: str = "dolphin-2.6-mistral-7b.Q4_K_M.gguf"
     n_ctx: int = 2048
     n_gpu_layers: int = 0
     n_threads: int | None = None
@@ -67,13 +67,13 @@ class ChatConfig:
             enabled=_env_bool("CHAT_ENABLED", default=False),
             model_path=model_path,
             model_repo=os.getenv(
-                "CHAT_MODEL_REPO", "TheBloke/Nous-Hermes-2-Pro-Mistral-7B-GGUF"
+                "CHAT_MODEL_REPO", "TheBloke/dolphin-2.6-mistral-7B-GGUF"
             ).strip()
-            or "TheBloke/Nous-Hermes-2-Pro-Mistral-7B-GGUF",
+            or "TheBloke/dolphin-2.6-mistral-7B-GGUF",
             model_file=os.getenv(
-                "CHAT_MODEL_FILE", "Nous-Hermes-2-Pro-Mistral-7B-GGUF.Q4_K_M.gguf"
+                "CHAT_MODEL_FILE", "dolphin-2.6-mistral-7b.Q4_K_M.gguf"
             ).strip()
-            or "Nous-Hermes-2-Pro-Mistral-7B-GGUF.Q4_K_M.gguf",
+            or "dolphin-2.6-mistral-7b.Q4_K_M.gguf",
             n_ctx=_env_int("CHAT_N_CTX", 2048),
             n_gpu_layers=_env_int("CHAT_N_GPU_LAYERS", 0),
             n_threads=n_threads,

@@ -8,6 +8,7 @@ services:
       - .env
     volumes:
       - ./prompts:/app/prompts:ro
+      - whisper-cache:/cache
     deploy:
       resources:
         reservations:
@@ -15,3 +16,6 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+volumes:
+  whisper-cache:
