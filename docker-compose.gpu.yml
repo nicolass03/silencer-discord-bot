@@ -4,6 +4,10 @@ services:
       context: .
       dockerfile: Dockerfile.gpu
     image: silencer-discord-bot:gpu
+    env_file:
+      - .env
+    volumes:
+      - ./prompts:/app/prompts:ro
     deploy:
       resources:
         reservations:

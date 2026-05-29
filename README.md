@@ -37,8 +37,9 @@ in this initial scaffold.
 2. Open the **Bot** tab and click **Add Bot**.
 3. Under the bot's **Token** section, click **Reset Token** and copy the new
    token.
-4. No privileged intents need to be enabled. The bot only uses `guilds` and
-   `voice_states`, both of which are non-privileged.
+4. No privileged intents need to be enabled. The bot uses `guilds`,
+   `voice_states`, and `messages` (non-privileged). Mention-only chat does
+   **not** require the Message Content privileged intent.
 
 ### 4. Configure your token
 
@@ -59,7 +60,8 @@ DISCORD_TOKEN=your-bot-token-here
 In the Developer Portal go to **OAuth2 -> URL Generator** and select:
 
 - **Scopes**: `bot`, `applications.commands`
-- **Bot Permissions**: `View Channels`, `Connect`, `Speak`, `Use Voice Activity`
+- **Bot Permissions**: `View Channels`, `Send Messages`, `Read Message History`,
+  `Connect`, `Speak`, `Use Voice Activity`
 
 Open the generated URL in a browser and pick a server you have **Manage Server**
 permission on.
@@ -170,6 +172,55 @@ All settings are optional and live in `.env`:
   in the transcript stream: partial transcripts appear every ~1.5 s while
   someone is talking, plus a final one once they pause.
 
+## @mention chat (local LLM)
+
+When a user @mentions the bot in a text channel, the bot can reply using
+[Nous-Hermes-2-Pro-Mistral-7B](https://huggingface.co/TheBloke/Nous-Hermes-2-Pro-Mistral-7B-GGUF)
+(GGUF via [llama-cpp-python](https://github.com/abetlen/llama-cpp-python))
+running fully on your machine. The prompt sent to the model is
+`{username}: {message text after the mention}` (Discord @handle, not display name).
+
+This feature is **off by default** (`CHAT_ENABLED=false`). When disabled, an
+@mention still gets a short reply (`Chat disabled.` by default) so users know
+chat is not running. When enabled, the model loads lazily on the first
+@mention and subsequent replies reuse it.
+
+### Configuration
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `CHAT_ENABLED` | `false` | Set to `true` / `1` / `yes` / `on` to load the model and reply. |
+| `CHAT_MODEL_PATH` | _(empty)_ | Optional path to a local `.gguf` file; skips Hugging Face download if set. |
+| `CHAT_MODEL_REPO` | `TheBloke/Nous-Hermes-2-Pro-Mistral-7B-GGUF` | Hugging Face repo for auto-download. |
+| `CHAT_MODEL_FILE` | `...Q4_K_M.gguf` | Quantized file name (~4 GB). Q4_K_M balances speed and RAM. |
+| `CHAT_N_CTX` | `2048` | Context window; lower uses less RAM. |
+| `CHAT_N_GPU_LAYERS` | `0` | `0` for CPU; `-1` or `35` to offload layers when using a CUDA llama-cpp build. |
+| `CHAT_N_THREADS` | _(all cores)_ | CPU threads for inference. |
+| `CHAT_MAX_TOKENS` | `256` | Max reply length from the model. |
+| `CHAT_TEMPERATURE` | `0.7` | Sampling temperature. |
+| `CHAT_TOP_P` | `0.9` | Nucleus sampling. |
+| `CHAT_INFERENCE_TIMEOUT` | `120` | Seconds before the bot gives up on a slow reply. |
+| `CHAT_PERSONALITY_PATH` | `prompts/personality.txt` | Text file with role, personality, and rules (see below). |
+| `CHAT_SYSTEM_PROMPT` | _(empty)_ | Optional one-line override; wins over the personality file. |
+| `CHAT_DISABLED_MESSAGE` | `Chat disabled.` | Reply when tagged but `CHAT_ENABLED=false`. |
+
+### Personality / role prompt
+
+Edit [`prompts/personality.txt`](prompts/personality.txt) to define who the bot is, how it speaks, and server rules. The file is sent as the ChatML **system** message on every @mention reply. See [`prompts/README.md`](prompts/README.md) for override order and Docker bind-mount tips.
+
+Restart the bot after editing the file. Placeholder sections in the default file are meant to be replaced with your own text.
+
+### First-run notes
+
+- The first @mention with chat enabled downloads the GGUF from Hugging Face
+  (same cache as Whisper when `HF_HOME` is set, e.g. in Docker under `/cache`).
+- Expect ~4 GB RAM for the Q4_K_M 7B model **in addition to** the Whisper
+  model. On a CPU-only host, use `WHISPER_MODEL=tiny` or `base`, or keep chat
+  disabled.
+- On a GPU host you can set `CHAT_N_GPU_LAYERS=-1` in `.env`. The stock
+  `pip install llama-cpp-python` wheel may still be CPU-only unless you install
+  a CUDA-enabled build yourself; the GPU Docker image does not change that.
+
 ## Run with Docker
 
 You can also run the bot in a container, which is the easiest way to "press
@@ -231,8 +282,9 @@ open Docker Desktop -> **Images** -> click the `silencer-discord-bot` image ->
   await self.tree.sync(guild=guild)
   ```
 
-- The bot uses a slash-command-only design; the `command_prefix` is set to
-  `when_mentioned` purely because `commands.Bot` requires a prefix value.
+- The bot uses slash commands for voice control; the `command_prefix` is set
+  to `when_mentioned` purely because `commands.Bot` requires a prefix value.
+  Text chat is handled via an `on_message` listener when the bot is @mentioned.
 
 ## Project layout
 
@@ -243,13 +295,20 @@ silencer-discord-bot/
 ├── Dockerfile
 ├── README.md
 ├── docker-compose.yml
+├── prompts/
+│   ├── README.md
+│   └── personality.txt
 ├── requirements.txt
 └── src/
     ├── __init__.py
     ├── bot.py
     ├── transcriber.py
+    ├── llm.py
+    ├── personality.py
     └── cogs/
         ├── __init__.py
+        ├── chat.py
+        ├── moderator.py
         ├── transcribe.py
         └── voice.py
 ```

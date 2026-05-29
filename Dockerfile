@@ -19,6 +19,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
+COPY prompts ./prompts
 
 RUN useradd --create-home --uid 1000 silencer \
     && mkdir -p /cache/huggingface \
