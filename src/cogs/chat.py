@@ -1,4 +1,4 @@
-"""@mention chat: reply in text channels using a local GGUF model."""
+"""@mention chat: reply in text channels using a configurable LLM backend."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import os
 import discord
 from discord.ext import commands
 
-from src.llm import ChatConfig, LlamaChat
+from src.llm import ChatBackend, ChatConfig, create_chat_backend
 
 log = logging.getLogger("silencer.chat")
 
@@ -35,15 +35,18 @@ def _strip_bot_mention(message: discord.Message, bot_user: discord.ClientUser) -
 
 
 class Chat(commands.Cog):
-    """Handles @mention replies with a local LLM when enabled."""
+    """Handles @mention replies with an LLM when enabled."""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._config = ChatConfig.from_env()
-        self._llm: LlamaChat | None = None
+        self._llm: ChatBackend | None = None
         if self._config.enabled:
-            self._llm = LlamaChat(self._config)
-            log.info("Chat replies enabled (model loads on first @mention)")
+            self._llm = create_chat_backend(self._config)
+            log.info(
+                "Chat replies enabled (provider=%s)",
+                self._config.provider,
+            )
 
     def cog_unload(self) -> None:
         if self._llm is not None:
@@ -78,7 +81,7 @@ class Chat(commands.Cog):
 
         user_line = f"{message.author.name}: {body}"
         if self._llm is None:
-            self._llm = LlamaChat(ChatConfig.from_env())
+            self._llm = create_chat_backend(ChatConfig.from_env())
 
         try:
             async with message.channel.typing():

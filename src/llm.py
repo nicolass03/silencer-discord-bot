@@ -1,8 +1,9 @@
-"""Local chat completions via llama-cpp-python (GGUF).
+"""Chat completions for @mention replies.
 
-- Model loads lazily on the first completion when chat is enabled.
-- Inference runs in a dedicated single-worker ThreadPoolExecutor.
-- GGUF files are resolved from CHAT_MODEL_PATH or downloaded from Hugging Face.
+Backends (CHAT_PROVIDER):
+- llama: local GGUF via llama-cpp-python
+- ollama_cloud: Ollama Cloud API (OLLAMA_API_KEY)
+- lmstudio: LM Studio OpenAI-compatible local server
 """
 
 from __future__ import annotations
@@ -13,6 +14,9 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol, runtime_checkable
+
+import aiohttp
 
 from src.personality import load_personality_prompt
 
@@ -20,6 +24,9 @@ log = logging.getLogger("silencer.llm")
 
 _IM_END = "<|" + "im_end" + "|>"
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
+_VALID_PROVIDERS = frozenset({"llama", "ollama_cloud", "lmstudio"})
+_OLLAMA_CLOUD_URL = "https://ollama.com/api/chat"
+_DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
 
 
 def _env_bool(name: str, *, default: bool = False) -> bool:
@@ -46,6 +53,7 @@ def _env_float(name: str, default: float) -> float:
 @dataclass(frozen=True)
 class ChatConfig:
     enabled: bool = False
+    provider: str = "llama"
     model_path: str | None = None
     model_repo: str = "TheBloke/dolphin-2.6-mistral-7B-GGUF"
     model_file: str = "dolphin-2.6-mistral-7b.Q4_K_M.gguf"
@@ -57,14 +65,25 @@ class ChatConfig:
     top_p: float = 0.9
     system_prompt: str = ""
     inference_timeout: float = 120.0
+    ollama_model: str = "gpt-oss:120b"
+    ollama_api_key: str | None = None
+    lmstudio_base_url: str = _DEFAULT_LMSTUDIO_BASE_URL
+    lmstudio_model: str = ""
 
     @classmethod
     def from_env(cls) -> "ChatConfig":
         threads_raw = os.getenv("CHAT_N_THREADS", "").strip()
         n_threads = int(threads_raw) if threads_raw else None
         model_path = os.getenv("CHAT_MODEL_PATH", "").strip() or None
+        provider = os.getenv("CHAT_PROVIDER", "llama").strip().lower() or "llama"
+        ollama_key = os.getenv("OLLAMA_API_KEY", "").strip() or None
+        lmstudio_base = (
+            os.getenv("LMSTUDIO_BASE_URL", _DEFAULT_LMSTUDIO_BASE_URL).strip()
+            or _DEFAULT_LMSTUDIO_BASE_URL
+        )
         return cls(
             enabled=_env_bool("CHAT_ENABLED", default=False),
+            provider=provider,
             model_path=model_path,
             model_repo=os.getenv(
                 "CHAT_MODEL_REPO", "TheBloke/dolphin-2.6-mistral-7B-GGUF"
@@ -82,7 +101,27 @@ class ChatConfig:
             top_p=_env_float("CHAT_TOP_P", 0.9),
             system_prompt=load_personality_prompt(),
             inference_timeout=_env_float("CHAT_INFERENCE_TIMEOUT", 120.0),
+            ollama_model=os.getenv("CHAT_OLLAMA_MODEL", "gpt-oss:120b").strip()
+            or "gpt-oss:120b",
+            ollama_api_key=ollama_key,
+            lmstudio_base_url=lmstudio_base.rstrip("/"),
+            lmstudio_model=os.getenv("CHAT_LMSTUDIO_MODEL", "").strip(),
         )
+
+
+@runtime_checkable
+class ChatBackend(Protocol):
+    async def complete(self, user_line: str) -> str: ...
+
+    def shutdown(self) -> None: ...
+
+
+def _chat_messages(config: ChatConfig, user_line: str) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = []
+    if config.system_prompt:
+        messages.append({"role": "system", "content": config.system_prompt})
+    messages.append({"role": "user", "content": user_line})
+    return messages
 
 
 def format_chatml_prompt(*, system: str, user_line: str) -> str:
@@ -216,3 +255,113 @@ class LlamaChat:
             loop.run_in_executor(self._executor, _run),
             timeout=cfg.inference_timeout,
         )
+
+
+class OllamaCloudChat:
+    """Chat completions via Ollama Cloud (https://ollama.com)."""
+
+    def __init__(self, config: ChatConfig) -> None:
+        if not config.ollama_api_key:
+            raise ValueError(
+                "OLLAMA_API_KEY is required when CHAT_PROVIDER=ollama_cloud"
+            )
+        self.config = config
+
+    def shutdown(self) -> None:
+        return
+
+    async def complete(self, user_line: str) -> str:
+        cfg = self.config
+        payload = {
+            "model": cfg.ollama_model,
+            "messages": _chat_messages(cfg, user_line),
+            "stream": False,
+            "options": {
+                "temperature": cfg.temperature,
+                "top_p": cfg.top_p,
+                "num_predict": cfg.max_tokens,
+            },
+        }
+        headers = {
+            "Authorization": f"Bearer {cfg.ollama_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        async def _request() -> str:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    _OLLAMA_CLOUD_URL,
+                    json=payload,
+                    headers=headers,
+                ) as resp:
+                    body = await resp.json(content_type=None)
+                    if resp.status >= 400:
+                        raise RuntimeError(
+                            f"Ollama Cloud API error {resp.status}: {body}"
+                        )
+                    message = body.get("message") or {}
+                    content = message.get("content", "")
+                    return str(content).strip()
+
+        return await asyncio.wait_for(_request(), timeout=cfg.inference_timeout)
+
+
+class LmStudioChat:
+    """Chat completions via LM Studio's OpenAI-compatible API."""
+
+    def __init__(self, config: ChatConfig) -> None:
+        if not config.lmstudio_model:
+            raise ValueError(
+                "CHAT_LMSTUDIO_MODEL is required when CHAT_PROVIDER=lmstudio"
+            )
+        self.config = config
+
+    def shutdown(self) -> None:
+        return
+
+    async def complete(self, user_line: str) -> str:
+        cfg = self.config
+        url = f"{cfg.lmstudio_base_url}/chat/completions"
+        payload = {
+            "model": cfg.lmstudio_model,
+            "messages": _chat_messages(cfg, user_line),
+            "max_tokens": cfg.max_tokens,
+            "temperature": cfg.temperature,
+            "top_p": cfg.top_p,
+            "stream": False,
+        }
+
+        async def _request() -> str:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload) as resp:
+                    body = await resp.json(content_type=None)
+                    if resp.status >= 400:
+                        raise RuntimeError(
+                            f"LM Studio API error {resp.status}: {body}"
+                        )
+                    choices = body.get("choices") or []
+                    if not choices:
+                        return ""
+                    message = choices[0].get("message") or {}
+                    content = message.get("content", "")
+                    return str(content).strip()
+
+        return await asyncio.wait_for(_request(), timeout=cfg.inference_timeout)
+
+
+def create_chat_backend(config: ChatConfig | None = None) -> ChatBackend:
+    """Instantiate the chat backend selected by CHAT_PROVIDER."""
+    cfg = config or ChatConfig.from_env()
+    provider = cfg.provider
+
+    if provider not in _VALID_PROVIDERS:
+        raise ValueError(
+            f"Unknown CHAT_PROVIDER={provider!r}; "
+            f"expected one of: {', '.join(sorted(_VALID_PROVIDERS))}"
+        )
+
+    if provider == "llama":
+        return LlamaChat(cfg)
+    if provider == "ollama_cloud":
+        return OllamaCloudChat(cfg)
+    return LmStudioChat(cfg)

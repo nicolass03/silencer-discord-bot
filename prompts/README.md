@@ -2,7 +2,7 @@
 
 Edit [`personality.txt`](personality.txt) to define how the bot behaves when someone @mentions it in chat.
 
-The file is loaded as the **system** message in the ChatML prompt (see [`src/llm.py`](../src/llm.py)). Restart the bot after saving changes.
+The file is loaded as the **system** message for every @mention chat provider (see [`src/llm.py`](../src/llm.py)). Restart the bot after saving changes.
 
 ## Override order
 

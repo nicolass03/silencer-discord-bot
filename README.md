@@ -172,30 +172,32 @@ All settings are optional and live in `.env`:
   in the transcript stream: partial transcripts appear every ~1.5 s while
   someone is talking, plus a final one once they pause.
 
-## @mention chat (local LLM)
+## @mention chat
 
-When a user @mentions the bot in a text channel, the bot can reply using
-[Dolphin 2.6 Mistral 7B](https://huggingface.co/TheBloke/dolphin-2.6-mistral-7B-GGUF)
-(GGUF via [llama-cpp-python](https://github.com/abetlen/llama-cpp-python))
-running fully on your machine. The prompt sent to the model is
+When a user @mentions the bot in a text channel, the bot can reply using an
+LLM backend selected by `CHAT_PROVIDER`. The prompt sent to the model is
 `{username}: {message text after the mention}` (Discord @handle, not display name).
 
 This feature is **off by default** (`CHAT_ENABLED=false`). When disabled, an
 @mention still gets a short reply (`Chat disabled.` by default) so users know
-chat is not running. When enabled, the model loads lazily on the first
-@mention and subsequent replies reuse it.
+chat is not running.
+
+### Providers
+
+Set `CHAT_PROVIDER` to one of:
+
+| Value | Backend | Notes |
+| --- | --- | --- |
+| `llama` (default) | [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) + GGUF | Runs on your machine; model loads lazily on first @mention. |
+| `ollama_cloud` | [Ollama Cloud](https://ollama.com/cloud) | Requires `OLLAMA_API_KEY` from [ollama.com/settings/keys](https://ollama.com/settings/keys). |
+| `lmstudio` | [LM Studio](https://lmstudio.ai/) local server | OpenAI-compatible API; start the server in LM Studio first. |
 
 ### Configuration
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `CHAT_ENABLED` | `false` | Set to `true` / `1` / `yes` / `on` to load the model and reply. |
-| `CHAT_MODEL_PATH` | _(empty)_ | Optional path to a local `.gguf` file; skips Hugging Face download if set. |
-| `CHAT_MODEL_REPO` | `TheBloke/dolphin-2.6-mistral-7B-GGUF` | Hugging Face repo for auto-download. |
-| `CHAT_MODEL_FILE` | `...Q4_K_M.gguf` | Quantized file name (~4 GB). Q4_K_M balances speed and RAM. |
-| `CHAT_N_CTX` | `2048` | Context window; lower uses less RAM. |
-| `CHAT_N_GPU_LAYERS` | `0` | `0` for CPU; `-1` or `35` to offload layers when using a CUDA llama-cpp build. |
-| `CHAT_N_THREADS` | _(all cores)_ | CPU threads for inference. |
+| `CHAT_ENABLED` | `false` | Set to `true` / `1` / `yes` / `on` to enable @mention replies. |
+| `CHAT_PROVIDER` | `llama` | `llama`, `ollama_cloud`, or `lmstudio`. |
 | `CHAT_MAX_TOKENS` | `256` | Max reply length from the model. |
 | `CHAT_TEMPERATURE` | `0.7` | Sampling temperature. |
 | `CHAT_TOP_P` | `0.9` | Nucleus sampling. |
@@ -204,15 +206,40 @@ chat is not running. When enabled, the model loads lazily on the first
 | `CHAT_SYSTEM_PROMPT` | _(empty)_ | Optional one-line override; wins over the personality file. |
 | `CHAT_DISABLED_MESSAGE` | `Chat disabled.` | Reply when tagged but `CHAT_ENABLED=false`. |
 
+**llama** (`CHAT_PROVIDER=llama`):
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `CHAT_MODEL_PATH` | _(empty)_ | Optional path to a local `.gguf` file; skips Hugging Face download if set. |
+| `CHAT_MODEL_REPO` | `TheBloke/dolphin-2.6-mistral-7B-GGUF` | Hugging Face repo for auto-download. |
+| `CHAT_MODEL_FILE` | `...Q4_K_M.gguf` | Quantized file name (~4 GB). Q4_K_M balances speed and RAM. |
+| `CHAT_N_CTX` | `2048` | Context window; lower uses less RAM. |
+| `CHAT_N_GPU_LAYERS` | `0` | `0` for CPU; `-1` or `35` to offload layers when using a CUDA llama-cpp build. |
+| `CHAT_N_THREADS` | _(all cores)_ | CPU threads for inference. |
+
+**ollama_cloud** (`CHAT_PROVIDER=ollama_cloud`):
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `OLLAMA_API_KEY` | _(required)_ | API key from [ollama.com/settings/keys](https://ollama.com/settings/keys). |
+| `CHAT_OLLAMA_MODEL` | `gpt-oss:120b` | Cloud model name (see [Ollama model library](https://ollama.com/library)). |
+
+**lmstudio** (`CHAT_PROVIDER=lmstudio`):
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `CHAT_LMSTUDIO_MODEL` | _(required)_ | Model ID as shown in LM Studio (must be loaded in the server). |
+| `LMSTUDIO_BASE_URL` | `http://localhost:1234/v1` | OpenAI-compatible base URL. In Docker, use `http://host.docker.internal:1234/v1`. |
+
 ### Personality / role prompt
 
-Edit [`prompts/personality.txt`](prompts/personality.txt) to define who the bot is, how it speaks, and server rules. The file is sent as the ChatML **system** message on every @mention reply. See [`prompts/README.md`](prompts/README.md) for override order and Docker bind-mount tips.
+Edit [`prompts/personality.txt`](prompts/personality.txt) to define who the bot is, how it speaks, and server rules. The file is sent as the **system** message on every @mention reply. See [`prompts/README.md`](prompts/README.md) for override order and Docker bind-mount tips.
 
 Restart the bot after editing the file. Placeholder sections in the default file are meant to be replaced with your own text.
 
-### First-run notes
+### First-run notes (llama provider)
 
-- The first @mention with chat enabled downloads the GGUF from Hugging Face
+- The first @mention with `CHAT_PROVIDER=llama` downloads the GGUF from Hugging Face
   (same cache as Whisper when `HF_HOME` is set, e.g. in Docker under `/cache`).
 - Expect ~4 GB RAM for the Q4_K_M 7B model **in addition to** the Whisper
   model. On a CPU-only host, use `WHISPER_MODEL=tiny` or `base`, or keep chat
@@ -220,6 +247,33 @@ Restart the bot after editing the file. Placeholder sections in the default file
 - On a GPU host you can set `CHAT_N_GPU_LAYERS=-1` in `.env`. The stock
   `pip install llama-cpp-python` wheel may still be CPU-only unless you install
   a CUDA-enabled build yourself; the GPU Docker image does not change that.
+
+### Example `.env` snippets
+
+Local GGUF (default):
+
+```env
+CHAT_ENABLED=true
+CHAT_PROVIDER=llama
+```
+
+Ollama Cloud:
+
+```env
+CHAT_ENABLED=true
+CHAT_PROVIDER=ollama_cloud
+OLLAMA_API_KEY=your-key-here
+CHAT_OLLAMA_MODEL=gpt-oss:120b
+```
+
+LM Studio:
+
+```env
+CHAT_ENABLED=true
+CHAT_PROVIDER=lmstudio
+CHAT_LMSTUDIO_MODEL=your-loaded-model
+LMSTUDIO_BASE_URL=http://localhost:1234/v1
+```
 
 ## Run with Docker
 
