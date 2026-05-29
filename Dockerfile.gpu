@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1.7
+
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04 AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HOME=/cache/huggingface \
+    XDG_CACHE_HOME=/cache \
+    DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3.12 \
+        python3.12-venv \
+        python3-pip \
+        libopus0 \
+        git \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.12 /usr/local/bin/python \
+    && ln -sf /usr/bin/python3.12 /usr/local/bin/python3
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+
+COPY src ./src
+
+RUN userdel -r ubuntu 2>/dev/null || true \
+    && useradd --create-home --uid 1000 silencer \
+    && mkdir -p /cache/huggingface \
+    && chown -R silencer:silencer /app /cache
+USER silencer
+
+CMD ["python", "-m", "src.bot"]
