@@ -1,0 +1,28 @@
+#!/bin/bash
+# EC2 user-data: install Docker, deploy scripts, fetch SSM config, start bot.
+
+set -euxo pipefail
+
+INSTALL_DIR="/opt/silencer"
+
+dnf update -y
+dnf install -y docker aws-cli
+systemctl enable --now docker
+usermod -aG docker ec2-user
+
+install -d "$INSTALL_DIR"
+
+echo "${fetch_env_sh_b64}" | base64 -d >"${INSTALL_DIR}/fetch-env.sh"
+chmod 755 "${INSTALL_DIR}/fetch-env.sh"
+
+echo "${start_bot_sh_b64}" | base64 -d >"${INSTALL_DIR}/start-bot.sh"
+chmod 755 "${INSTALL_DIR}/start-bot.sh"
+
+echo "${silencer_bot_service_b64}" | base64 -d >/etc/systemd/system/silencer-bot.service
+chmod 644 /etc/systemd/system/silencer-bot.service
+
+"${INSTALL_DIR}/fetch-env.sh"
+
+systemctl daemon-reload
+systemctl enable silencer-bot.service
+systemctl start silencer-bot.service

@@ -1,5 +1,8 @@
 # AWS EC2 deployment (slim profile, $0 AWS cost)
 
+> **Terraform (recommended):** For repeatable first-time deploy, app updates, and env
+> changes via `terraform apply`, see [`../../terraform/README.md`](../../terraform/README.md).
+
 Run the **slim** bot (voice + music + Ollama Cloud chat) on a **t3.micro**
 in **us-east-1** using Docker directly on the instance. This path avoids
 paid AWS services (no Secrets Manager, no Fargate, no NAT Gateway, no load
