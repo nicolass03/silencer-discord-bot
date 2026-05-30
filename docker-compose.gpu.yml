@@ -3,9 +3,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.gpu
+      args:
+        BOT_PROFILE: full
     image: silencer-discord-bot:gpu
     env_file:
       - .env
+    environment:
+      BOT_PROFILE: full
     volumes:
       - ./prompts:/app/prompts:ro
       - whisper-cache:/cache

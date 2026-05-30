@@ -11,6 +11,8 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from src.profile import is_full, profile_name, validate_profile_config
+
 log = logging.getLogger("silencer.bot")
 
 
@@ -30,12 +32,14 @@ class SilencerBot(commands.Bot):
         )
 
     async def setup_hook(self) -> None:
-        await self.load_extension("src.cogs.moderator")
-        await self.load_extension("src.cogs.transcribe")
+        if is_full():
+            await self.load_extension("src.cogs.moderator")
+            await self.load_extension("src.cogs.transcribe")
         await self.load_extension("src.cogs.voice")
         await self.load_extension("src.cogs.music")
         await self.load_extension("src.cogs.chat")
         synced = await self.tree.sync()
+        log.info("Bot profile: %s", profile_name())
         log.info("Synced %d slash command(s) globally", len(synced))
 
     async def on_message(self, message: discord.Message) -> None:
@@ -72,6 +76,8 @@ async def _main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
+    load_dotenv()
+    validate_profile_config()
     token = _read_token()
     bot = SilencerBot()
 

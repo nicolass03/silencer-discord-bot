@@ -1,15 +1,1 @@
-discord.py[voice]>=2.7,<3
-# Pinned to a fork until upstream merges the DAVE (Discord E2EE voice) fix.
-# Upstream PyPI release 0.5.2a179 cannot decode packets from Discord's 2026/03
-# DAVE rollout - they arrive DAVE-encrypted and Opus fails with
-# "corrupted stream". This fork contains PR #56 which inserts a DAVE decrypt
-# step before Opus decoding.
-# See https://github.com/imayhaveborkedit/discord-ext-voice-recv/pull/56
-discord-ext-voice-recv @ git+https://github.com/vocolboy/discord-ext-voice-recv.git@ee160c0f36516927b6214bc9d6babe524016770f
-PyNaCl>=1.5
-python-dotenv>=1.0
-faster-whisper>=1.1,<2
-numpy>=1.24
-llama-cpp-python>=0.3,<1
-huggingface_hub>=0.23
-yt-dlp>=2024.12,<2026
+-r requirements-full.txt

@@ -20,6 +20,7 @@ from typing import Protocol, runtime_checkable
 import aiohttp
 
 from src.personality import load_personality_prompt
+from src.profile import is_slim
 
 log = logging.getLogger("silencer.llm")
 
@@ -361,6 +362,12 @@ def create_chat_backend(config: ChatConfig | None = None) -> ChatBackend:
         raise ValueError(
             f"Unknown CHAT_PROVIDER={provider!r}; "
             f"expected one of: {', '.join(sorted(_VALID_PROVIDERS))}"
+        )
+
+    if is_slim() and provider != "ollama_cloud":
+        raise ValueError(
+            f"CHAT_PROVIDER={provider!r} is not available when BOT_PROFILE=slim; "
+            "use ollama_cloud or disable chat with CHAT_ENABLED=false."
         )
 
     if provider == "llama":
