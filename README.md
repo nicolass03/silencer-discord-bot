@@ -390,8 +390,9 @@ OLLAMA_API_KEY=your-key-here
 Image tag: `silencer-discord-bot:slim`. No whisper model cache volume. Compose
 sets a 768 MB memory limit suitable for small hosts.
 
-See [deploy/ecs/README.md](deploy/ecs/README.md) for AWS ECS deployment of the
-slim image.
+See [deploy/ec2/README.md](deploy/ec2/README.md) for the **$0 AWS EC2 free-tier**
+path (t3.micro, us-east-1, secrets in `/etc/silencer-bot.env`), or
+[deploy/ecs/README.md](deploy/ecs/README.md) for paid ECS/Fargate deployment.
 
 ### Option C: GPU Compose (full profile only)
 
@@ -455,6 +456,13 @@ silencer-discord-bot/
 ├── docker-compose.slim.yml
 ├── docker-compose.gpu.yml
 ├── deploy/
+│   ├── ec2/
+│   │   ├── README.md
+│   │   ├── bootstrap-user-data.sh
+│   │   ├── install-on-instance.sh
+│   │   ├── silencer-bot.env.example
+│   │   ├── silencer-bot.service
+│   │   └── start-bot.sh
 │   └── ecs/
 │       ├── README.md
 │       └── task-definition.slim.json

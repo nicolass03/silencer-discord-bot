@@ -1,0 +1,17 @@
+[Unit]
+Description=Silencer Discord bot (slim profile, ECR image)
+Documentation=https://github.com/nicolass03/silencer-discord-bot/blob/main/deploy/ec2/README.md
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=-/etc/silencer-bot.env
+ExecStart=/opt/silencer/start-bot.sh
+ExecStop=/usr/bin/docker stop silencer-bot
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

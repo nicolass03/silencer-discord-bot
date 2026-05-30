@@ -1,8 +1,11 @@
 # AWS ECS deployment (slim profile)
 
+> **Cost note:** Fargate, Secrets Manager, and NAT Gateways are **not free**.
+> For a $0 AWS deployment, use [../ec2/README.md](../ec2/README.md) instead.
+
 Deploy the **slim** bot image (voice + music + Ollama Cloud chat, no local
 STT/LLM) on Amazon ECS. This guide targets **Fargate**; a note at the end
-covers the **EC2 free-tier** path.
+covers EC2-backed ECS.
 
 ## Prerequisites
 
@@ -141,6 +144,9 @@ Instead of Fargate:
 4. Account for the ECS agent using ~100–200 MB of host RAM.
 
 Fargate has no free tier; EC2 free tier lasts 12 months for new accounts.
+
+For a step-by-step **t3.micro + Docker** guide with **$0 AWS cost**, see
+[../ec2/README.md](../ec2/README.md).
 
 ## Environment reference
 
