@@ -19,6 +19,7 @@ CONTAINER_NAME="${CONTAINER_NAME:-silencer-bot}"
 IMAGE_TAG="${IMAGE_TAG:-slim}"
 MEMORY_LIMIT="${MEMORY_LIMIT:-768m}"
 CHAT_OLLAMA_MODEL="${CHAT_OLLAMA_MODEL:-gpt-oss:120b}"
+MUSIC_MAX_QUEUE="${MUSIC_MAX_QUEUE:-}"
 
 if [[ "$DISCORD_TOKEN" == "your-discord-token-here" ]] \
     || [[ "$OLLAMA_API_KEY" == "your-ollama-api-key-here" ]]; then
@@ -47,16 +48,23 @@ if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
 fi
 
 echo "Starting ${CONTAINER_NAME}..."
+DOCKER_ENV=(
+  -e BOT_PROFILE=slim
+  -e CHAT_ENABLED=true
+  -e CHAT_PROVIDER=ollama_cloud
+  -e CHAT_OLLAMA_MODEL="$CHAT_OLLAMA_MODEL"
+  -e DISCORD_TOKEN="$DISCORD_TOKEN"
+  -e OLLAMA_API_KEY="$OLLAMA_API_KEY"
+)
+if [[ -n "$MUSIC_MAX_QUEUE" ]]; then
+  DOCKER_ENV+=(-e "MUSIC_MAX_QUEUE=$MUSIC_MAX_QUEUE")
+fi
+
 docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   --memory "$MEMORY_LIMIT" \
-  -e BOT_PROFILE=slim \
-  -e CHAT_ENABLED=true \
-  -e CHAT_PROVIDER=ollama_cloud \
-  -e CHAT_OLLAMA_MODEL="$CHAT_OLLAMA_MODEL" \
-  -e DISCORD_TOKEN="$DISCORD_TOKEN" \
-  -e OLLAMA_API_KEY="$OLLAMA_API_KEY" \
+  "${DOCKER_ENV[@]}" \
   "$IMAGE"
 
 echo "Container started. Recent logs:"

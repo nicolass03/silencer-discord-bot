@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Fetch bot config and secrets from SSM Parameter Store into /etc/silencer-bot.env.
+# Installed by Terraform user-data; also run before redeploys.
+
+set -euo pipefail
+
+ENV_FILE="/etc/silencer-bot.env"
+AWS_REGION="${aws_region}"
+SSM_PREFIX="${ssm_prefix}"
+
+get_param() {
+  aws ssm get-parameter \
+    --name "$1" \
+    --with-decryption \
+    --region "$AWS_REGION" \
+    --query "Parameter.Value" \
+    --output text
+}
+
+DISCORD_TOKEN="$(get_param "${SSM_PREFIX}/discord_token")"
+OLLAMA_API_KEY="$(get_param "${SSM_PREFIX}/ollama_api_key")"
+PARAM_AWS_REGION="$(get_param "${SSM_PREFIX}/aws_region")"
+ECR_REPO="$(get_param "${SSM_PREFIX}/ecr_repo")"
+IMAGE_TAG="$(get_param "${SSM_PREFIX}/image_tag")"
+MEMORY_LIMIT="$(get_param "${SSM_PREFIX}/memory_limit")"
+CHAT_OLLAMA_MODEL="$(get_param "${SSM_PREFIX}/chat_ollama_model")"
+MUSIC_MAX_QUEUE="$(get_param "${SSM_PREFIX}/music_max_queue")"
+
+install -d "$(dirname "$ENV_FILE")"
+cat >"$ENV_FILE" <<EOF
+AWS_REGION=${PARAM_AWS_REGION}
+ECR_REPO=${ECR_REPO}
+IMAGE_TAG=${IMAGE_TAG}
+CONTAINER_NAME=silencer-bot
+MEMORY_LIMIT=${MEMORY_LIMIT}
+DISCORD_TOKEN=${DISCORD_TOKEN}
+OLLAMA_API_KEY=${OLLAMA_API_KEY}
+CHAT_OLLAMA_MODEL=${CHAT_OLLAMA_MODEL}
+MUSIC_MAX_QUEUE=${MUSIC_MAX_QUEUE}
+EOF
+
+chmod 600 "$ENV_FILE"
+echo "Wrote ${ENV_FILE}"
